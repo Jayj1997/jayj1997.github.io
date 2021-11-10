@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Welcome to Jayj&#39;s Blog</title>
+  
+  
+  <link href="http://jayj1997.github.io/atom.xml" rel="self"/>
+  
+  <link href="http://jayj1997.github.io/"/>
+  <updated>2021-11-10T15:58:42.576Z</updated>
+  <id>http://jayj1997.github.io/</id>
+  
+  <author>
+    <name>Jayj</name>
+    
+  </author>
+  
+  <generator uri="https://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>使用gin作网关, etcd作服务发现实现go-grpc微服务的保姆级教程</title>
+    <link href="http://jayj1997.github.io/2021/11/09/gin_etcd_microservices/"/>
+    <id>http://jayj1997.github.io/2021/11/09/gin_etcd_microservices/</id>
+    <published>2021-11-09T07:27:12.158Z</published>
+    <updated>2021-11-10T15:58:42.576Z</updated>
+    
+    
+      
+      
+        
+        
+    <summary type="html">&lt;p&gt;在网上有着数不清的帖子教学如何单独搭建grpc与etcd、如何使用go-grpc-gateway等等教程，如果你在读过这一大堆的文章教程之后，&lt;br&gt;仍然是没有搞懂网关如何接管RESTAPI的请求并转发、服务间如何通信、  </summary>
+        
+      
+    
+    
+    
+    <category term="微服务" scheme="http://jayj1997.github.io/categories/%E5%BE%AE%E6%9C%8D%E5%8A%A1/"/>
+    
+    
+    <category term="etcd" scheme="http://jayj1997.github.io/tags/etcd/"/>
+    
+  </entry>
+  
+</feed>
