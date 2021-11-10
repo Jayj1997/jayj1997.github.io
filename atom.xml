@@ -6,7 +6,7 @@
   <link href="http://jayj1997.github.io/atom.xml" rel="self"/>
   
   <link href="http://jayj1997.github.io/"/>
-  <updated>2021-11-09T10:41:28.149Z</updated>
+  <updated>2021-11-10T15:26:08.606Z</updated>
   <id>http://jayj1997.github.io/</id>
   
   <author>
@@ -21,7 +21,7 @@
     <link href="http://jayj1997.github.io/2021/11/09/gin_etcd_microservices/"/>
     <id>http://jayj1997.github.io/2021/11/09/gin_etcd_microservices/</id>
     <published>2021-11-09T07:27:12.158Z</published>
-    <updated>2021-11-09T10:41:28.149Z</updated>
+    <updated>2021-11-10T15:26:08.606Z</updated>
     
     
       
@@ -34,6 +34,8 @@
     
     
     
+    
+    <category term="etcd 微服务 gin" scheme="http://jayj1997.github.io/tags/etcd-%E5%BE%AE%E6%9C%8D%E5%8A%A1-gin/"/>
     
   </entry>
   
