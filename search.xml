@@ -84,6 +84,81 @@
       </categories>
       <tags>
         <tag>etcd</tag>
+        <tag>gin</tag>
+        <tag>go-grpc</tag>
+        <tag>微服务</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>使用docker部署一套相比ELK更轻量的日志系统LPG</title>
+    <url>/2021/11/16/how-to-lpg/</url>
+    <content><![CDATA[<h2 id="Why-this"><a href="#Why-this" class="headerlink" title="Why this"></a>Why this</h2><p>使用过ELK日志系统的话，你可能知道Logstash强大，它可以实现数据传输、格式处理、格式化输出，和强大的插件功能，经常用于日志处理，但是同时logstash也较为消耗资源，占用了很多的CPU和内存，并且由于没有消息队列缓存，存在数据丢失的隐患。很多时候我们对日志的需求并没有那么高，并不需要盯着日志分析结果，只是简单的看几个参数，有没有报错就停止了。更加常见的场景是，我们的服务器并没有那么多余的空间留给日志系统。</p>
+<p>所以这篇文章来介绍一套轻量的日志系统LPG（loki、promtail、grafana）</p>
+<ul>
+<li>loki: 主服务器，负责存储日志和处理查询</li>
+<li>promtail: 代理，负责收集日志发送给loki</li>
+<li>grafana: 看板，用来查询和显示日志</li>
+</ul>
+<p>loki: like Prometheus, but for logs(像普罗米修斯监控一样，只不过是监控日志)，受到普罗米修斯的启发的水平拓展、高可用、多租户日志聚合系统。</p>
+<p>和其他聚合日志系统相比，loki：</p>
+<ul>
+<li>不对日志进行全文索引。通过存储压缩的非结构化日志和仅索引元数据，loki更易于操作且运行成本更低。</li>
+<li>使用您已经在 Prometheus 中使用的相同标签对日志流进行索引和分组，使您能够使用您已经在 Prometheus 中使用的相同标签在指标和日志之间无缝切换。</li>
+<li>尤其适合存储Kubernetes Pod 日志。Pod 标签等元数据会被自动抓取和索引。</li>
+<li>在 Grafana 看板中有图形界面支持（需要 Grafana v6.0）</li>
+</ul>
+<p>根据官方介绍，可以了解到loki的优点是不会对日志全文索引，仅索引“标签”；压缩了非结构化的日志让体积更小；接下来介绍如何使用docker部署LPG日志系统</p>
+<h2 id="Get-Started"><a href="#Get-Started" class="headerlink" title="Get Started"></a>Get Started</h2><h3 id="loki-yml"><a href="#loki-yml" class="headerlink" title="loki.yml"></a>loki.yml</h3><p>这个文件是配置loki相关的，在docker-compose文件中会映射入loki的image内，我会把可能你会涉及到的配置标注上注释，更具体的配置请参考<a href="https://grafana.com/docs/loki/latest/configuration/">loki 官方文档</a></p>
+<figure class="highlight yml"><table><tr><td class="code"><pre><span class="line"><span class="comment"># 认证相关</span></span><br><span class="line"><span class="attr">auth_enabled:</span> <span class="literal">false</span></span><br><span class="line"></span><br><span class="line"><span class="attr">server:</span></span><br><span class="line">    <span class="comment"># 监听的端口 因为promtail是主动推送日志给loki 所以需要监听端口号</span></span><br><span class="line">    <span class="attr">http_listen_port:</span> <span class="number">3100</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 配置 ingester 以及 ingester 如何将自己注册到键值存储。</span></span><br><span class="line"><span class="attr">ingester:</span></span><br><span class="line">    <span class="attr">lifecycler:</span></span><br><span class="line">        <span class="comment"># ip地址</span></span><br><span class="line">        <span class="attr">address:</span> <span class="number">127.0</span><span class="number">.0</span><span class="number">.1</span></span><br><span class="line">        <span class="attr">ring:</span></span><br><span class="line">            <span class="attr">kvstore:</span></span><br><span class="line">                <span class="comment"># 存在内存中</span></span><br><span class="line">                <span class="attr">store:</span> <span class="string">inmemory</span></span><br><span class="line">            <span class="attr">replication_factor:</span> <span class="number">1</span></span><br><span class="line">        <span class="attr">final_sleep:</span> <span class="string">0s</span></span><br><span class="line">    <span class="comment"># 指定时间内的块（chunk）未接收到新日志将会被清空</span></span><br><span class="line">    <span class="attr">chunk_idle_period:</span> <span class="string">1h</span></span><br><span class="line">    <span class="comment"># 所有的chunk都将在指定时间后被清空，默认1h</span></span><br><span class="line">    <span class="attr">max_chunk_age:</span> <span class="string">1h</span></span><br><span class="line">    <span class="comment"># 每个chunk大小为1.5M</span></span><br><span class="line">    <span class="attr">chunk_target_size:</span> <span class="number">1048576</span></span><br><span class="line">    <span class="comment"># 如果使用索引缓存，则这个时间必须大于索引读取缓存的TTL（默认索引读取缓存 TTL 为 5m）</span></span><br><span class="line">    <span class="attr">chunk_retain_period:</span> <span class="string">30s</span></span><br><span class="line">    <span class="comment"># 最大尝试次数 0为disabled</span></span><br><span class="line">    <span class="attr">max_transfer_retries:</span> <span class="number">0</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 配置块索引模式及其存储位置</span></span><br><span class="line"><span class="attr">schema_config:</span></span><br><span class="line">    <span class="attr">configs:</span></span><br><span class="line">        <span class="bullet">-</span> <span class="attr">from:</span> <span class="number">2019-11-17</span> <span class="comment"># 创建索引存储区的第一天的日期。如果这是您唯一的 period_config，请使用过去的日期. 否则请使用您希望架构切换的日期。 YYYY-MM-DD 格式，例如：2018-04-15。</span></span><br><span class="line">          <span class="attr">store:</span> <span class="string">boltdb-shipper</span> <span class="comment"># 用于索引的储存</span></span><br><span class="line">          <span class="attr">object_store:</span> <span class="string">filesystem</span></span><br><span class="line">          <span class="attr">schema:</span> <span class="string">v11</span></span><br><span class="line">          <span class="attr">index:</span></span><br><span class="line">            <span class="attr">prefix:</span> <span class="string">index_</span></span><br><span class="line">            <span class="attr">period:</span> <span class="string">24h</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 配置索引和块的存储</span></span><br><span class="line"><span class="attr">storage_config:</span></span><br><span class="line">    <span class="attr">boltdb_shipper:</span></span><br><span class="line">        <span class="attr">active_index_directory:</span> <span class="string">/loki/boltdb-shipper-active</span></span><br><span class="line">        <span class="attr">cache_location:</span> <span class="string">/loki/boltdb-shipper-cache</span></span><br><span class="line">        <span class="attr">cache_ttl:</span> <span class="string">24h</span> <span class="comment"># 缓存保存时长，可以提升长查询的速度，但是会占据更多的空间</span></span><br><span class="line">        <span class="attr">shared_store:</span> <span class="string">filesystem</span></span><br><span class="line">    <span class="attr">filesystem:</span></span><br><span class="line">        <span class="attr">directory:</span> <span class="string">/loki/chunks</span></span><br><span class="line"></span><br><span class="line"><span class="attr">compactor:</span></span><br><span class="line">    <span class="attr">working_directory:</span> <span class="string">/loki/boltdb-shipper-compactor</span></span><br><span class="line">    <span class="attr">shared_store:</span> <span class="string">filesystem</span></span><br><span class="line"></span><br><span class="line"><span class="attr">limits_config:</span></span><br><span class="line">    <span class="attr">reject_old_samples:</span> <span class="literal">true</span></span><br><span class="line">    <span class="attr">reject_old_samples_max_age:</span> <span class="string">168h</span></span><br><span class="line"></span><br><span class="line"><span class="attr">chunk_store_config:</span></span><br><span class="line">    <span class="attr">max_look_back_period:</span> <span class="string">0s</span></span><br><span class="line"></span><br><span class="line"><span class="attr">table_manager:</span></span><br><span class="line">    <span class="attr">retention_deletes_enabled:</span> <span class="literal">false</span></span><br><span class="line">    <span class="attr">retention_period:</span> <span class="string">0s</span></span><br><span class="line"></span><br><span class="line"><span class="attr">ruler:</span></span><br><span class="line">    <span class="attr">storage:</span></span><br><span class="line">        <span class="attr">type:</span> <span class="string">local</span></span><br><span class="line">        <span class="attr">local:</span></span><br><span class="line">            <span class="attr">directory:</span> <span class="string">/loki/rules</span></span><br><span class="line">    <span class="attr">rule_path:</span> <span class="string">/loki/rules-temp</span></span><br><span class="line">    <span class="attr">alertmanager_url:</span> <span class="string">http://localhost:9093</span></span><br><span class="line">    <span class="attr">ring:</span></span><br><span class="line">        <span class="attr">kvstore:</span></span><br><span class="line">            <span class="attr">store:</span> <span class="string">inmemory</span></span><br><span class="line">    <span class="attr">enable_api:</span> <span class="literal">true</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="promtail-yml"><a href="#promtail-yml" class="headerlink" title="promtail.yml"></a>promtail.yml</h3><p>这个文件是配置promtail相关的，注释情况如上，更具体的配置请参考<a href="https://grafana.com/docs/loki/latest/clients/promtail/configuration/">promtail 官方文档</a></p>
+<figure class="highlight yml"><table><tr><td class="code"><pre><span class="line"><span class="attr">server:</span></span><br><span class="line">    <span class="attr">http_listen_port:</span> <span class="number">9080</span> <span class="comment"># 监听端口</span></span><br><span class="line">    <span class="attr">grpc_listen_port:</span> <span class="number">0</span> <span class="comment"># grpc 监听端口</span></span><br><span class="line"></span><br><span class="line"><span class="attr">positions:</span></span><br><span class="line">  <span class="attr">filename:</span> <span class="string">/tmp/positions.yaml</span></span><br><span class="line"></span><br><span class="line"><span class="attr">clients:</span></span><br><span class="line">  <span class="bullet">-</span> <span class="attr">url:</span> <span class="string">http://loki:3100/loki/api/v1/push</span> <span class="comment"># loki的通讯地址 与 loki.yml内的监听端口对应</span></span><br><span class="line"></span><br><span class="line"><span class="attr">scrape_configs:</span></span><br><span class="line">  <span class="bullet">-</span> <span class="attr">job_name:</span> <span class="string">system</span></span><br><span class="line">    <span class="attr">static_configs:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">targets:</span></span><br><span class="line">          <span class="bullet">-</span> <span class="string">localhost</span></span><br><span class="line">        <span class="attr">labels:</span></span><br><span class="line">          <span class="attr">job:</span> <span class="string">varlogs</span></span><br><span class="line">          <span class="attr">__path__:</span> <span class="string">/var/log/*log</span> <span class="comment"># 在此处配置你要监听的日志的地址所存储的地址</span></span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<h3 id="docker-compose-yml"><a href="#docker-compose-yml" class="headerlink" title="docker-compose.yml"></a>docker-compose.yml</h3><p>最后是lpg的compose文件, 具体每一行做了什么我会将注释写在文件里，如果你完全看不懂docker-compose，可以先尝试学习docker。</p>
+<figure class="highlight dockerfile"><table><tr><td class="code"><pre><span class="line">version: <span class="string">&#x27;3&#x27;</span></span><br><span class="line"></span><br><span class="line">services:</span><br><span class="line">    <span class="comment"># 日志的存储和解析</span></span><br><span class="line">    loki:</span><br><span class="line">        image: grafana/loki</span><br><span class="line">        container_name: lpg-promtail</span><br><span class="line">        volumes:</span><br><span class="line">            <span class="comment"># 持久化loki配置 映射的地址可以根据自己的需求更改</span></span><br><span class="line">            - ../data/lpg/loki:/etcd/loki</span><br><span class="line">            <span class="comment"># loki的配置文件</span></span><br><span class="line">            - ./loki.yml:/etc/loki-conf/loki.yml</span><br><span class="line">        command: -config.file=/etcd/loki-conf/loki.yml</span><br><span class="line">        ports:</span><br><span class="line">            - <span class="number">3100</span>:<span class="number">3100</span></span><br><span class="line">        networks:</span><br><span class="line">            - lpg</span><br><span class="line"></span><br><span class="line">    <span class="comment"># 日志收集器</span></span><br><span class="line">    promtail:</span><br><span class="line">        image: grafana/promtail</span><br><span class="line">        container_name: lpg-promtail</span><br><span class="line">        volumes:</span><br><span class="line">            <span class="comment"># 你需要将要监听的日志映射入容器内 使用编写软连接等方式将日志收集到一个文件夹内</span></span><br><span class="line">            <span class="comment"># 通过promtail.yml对应的检索方式发现日志文件，修改左边的地址到你对应的日志存储地址</span></span><br><span class="line">            - ../data/lpg/logs:/var/log</span><br><span class="line">            <span class="comment"># 持久化promtail</span></span><br><span class="line">            - ../data/lpg/promtail:/etc/promtail</span><br><span class="line">            <span class="comment"># promtail的配置文件</span></span><br><span class="line">            - ./promtail.yml:/etc/promtail-conf/promtail.yml</span><br><span class="line">        command: -config.file=/etc/promtail-conf/promtail.yml</span><br><span class="line">        networks:</span><br><span class="line">            - lpg</span><br><span class="line"></span><br><span class="line">    <span class="comment"># 日志看板 可视化</span></span><br><span class="line">    grafana:</span><br><span class="line">        image: grafana/grafana</span><br><span class="line">        container_name: lpg-grafana</span><br><span class="line">        ports:</span><br><span class="line">            - <span class="number">3000</span>:<span class="number">3000</span></span><br><span class="line">        networks:</span><br><span class="line">            - lpg</span><br><span class="line"></span><br><span class="line">networks:</span><br><span class="line">    lpg:</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<h3 id="文件结构"><a href="#文件结构" class="headerlink" title="文件结构"></a>文件结构</h3><ul>
+<li>compose<ul>
+<li>data<ul>
+<li>lpg<ul>
+<li>logs 日志集合</li>
+<li>loki loki持久化</li>
+<li>promtail promtail持久化</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>lpg<ul>
+<li>loki.yml loki配置文件</li>
+<li>docker-compose.yml compose文件</li>
+<li>promtail.yml # promtail配置文件</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p>这个结构只是一个参考，如果你会用docker，可以自己配置文件的位置和存储的地址等</p>
+<h3 id="启动compose文件"><a href="#启动compose文件" class="headerlink" title="启动compose文件"></a>启动compose文件</h3><p>在编写完docker-compose文件之后，就可以启动了。需要注意的是，在启动promtail之前，promtail抓取日志的路径下应该至少存在一个符合抓取规则的日志，如果没有找到的话，promtail就会停止抓取。很多人一开始在grafana看板中找不到日志也是这个原因。</p>
+<h2 id="配置grafana"><a href="#配置grafana" class="headerlink" title="配置grafana"></a>配置grafana</h2><p>启动了compose文件之后，就可以进入grafana看板的地址查看效果了，启动的地址在3000（或者你自己设置的）端口，默认的账户名和密码都是admin。</p>
+<p>在登录进入grafana之后，首先你应该配置数据来源(data source)，如图1、2、3所示：</p>
+<p><img src="/images/lpg_grafana_datasource_1.png" alt="配置数据来源1"><br><img src="/images/lpg_grafana_datasource_2.png" alt="配置数据来源2"><br><img src="/images/lpg_grafana_datasource_3.png" alt="配置数据来源3"></p>
+<p>在配置完数据来源后，进入Explore查看当前的抓取情况，配置如图4、5、6所示：</p>
+<p><img src="/images/lpg_grafana_explore_1.png" alt="配置查看页面4"></p>
+<p>根据图4的Add query会发现，一个grafana是可以对应多个loki的，对于有分布式部署日志收集需求的，就可以在这里设置多个数据来源来查看</p>
+<p><img src="/images/lpg_grafana_explore_2.png" alt="配置查看页面5"></p>
+<p>点击展开图5的步骤2展开列表，选择你想通过哪种label来查看日志，我这里是通过文件名来筛选，然后在步骤4选择具体的文件。步骤5、6分别是查询的类型和最多限制多少行日志分页。 并且你还可以自己编写resulting selector（点击步骤8可以看到具体的语法详情）</p>
+<p><img src="/images/lpg_grafana_explore_3.png" alt="配置查看页面6"></p>
+<p>在这里就基本大功告成了，你可以看到日志在时间内的产生速率，和各种过滤日志的方法，比如服务的日志存在大量重复的输出，就可以在Dedup(去重)处选择Signature，以特征过滤重复日志。根据图5中的步骤6来设置的每段多少行内容进行的分段等等。在这里还差一点，那就是我想看某一个时间段的日志，或者项目新版本刚上线，需要实时观看日志的产生可不可以呢？当然可以</p>
+<p><img src="/image/lpg_grafana_livestream.png" alt="live stream"></p>
+<p>在grafana看板右上角有按照你的需求查询和实时查询两个选项。可以通过这两个按钮查找所需时段的日志和实时产生的日志。在这里基本就是lpg的全部功能了。</p>
+<h2 id="end"><a href="#end" class="headerlink" title="end"></a>end</h2><p>到这里lpg部署的全部工作就完成了，如果你看到了这里，恭喜你学会了一套轻量、横向扩展的日志系统。如果在部署的过程中遇到了跟本文流程冲突的bug或者问题。可以在评论区留言或者通过邮箱联系我，我会尽量解答你的问题~</p>
+]]></content>
+      <categories>
+        <category>系统</category>
+      </categories>
+      <tags>
+        <tag>loki</tag>
+        <tag>日志系统</tag>
       </tags>
   </entry>
 </search>

@@ -6,7 +6,7 @@
   <link href="http://jayj1997.github.io/atom.xml" rel="self"/>
   
   <link href="http://jayj1997.github.io/"/>
-  <updated>2021-11-11T15:36:54.018Z</updated>
+  <updated>2021-11-18T08:47:47.911Z</updated>
   <id>http://jayj1997.github.io/</id>
   
   <author>
@@ -17,11 +17,38 @@
   <generator uri="https://hexo.io/">Hexo</generator>
   
   <entry>
+    <title>使用docker部署一套相比ELK更轻量的日志系统LPG</title>
+    <link href="http://jayj1997.github.io/2021/11/16/how-to-lpg/"/>
+    <id>http://jayj1997.github.io/2021/11/16/how-to-lpg/</id>
+    <published>2021-11-16T11:46:00.000Z</published>
+    <updated>2021-11-18T08:47:47.911Z</updated>
+    
+    
+      
+      
+        
+        
+    <summary type="html">&lt;h2 id=&quot;Why-this&quot;&gt;&lt;a href=&quot;#Why-this&quot; class=&quot;headerlink&quot; title=&quot;Why this&quot;&gt;&lt;/a&gt;Why</summary>
+        
+      
+    
+    
+    
+    <category term="系统" scheme="http://jayj1997.github.io/categories/%E7%B3%BB%E7%BB%9F/"/>
+    
+    
+    <category term="loki" scheme="http://jayj1997.github.io/tags/loki/"/>
+    
+    <category term="日志系统" scheme="http://jayj1997.github.io/tags/%E6%97%A5%E5%BF%97%E7%B3%BB%E7%BB%9F/"/>
+    
+  </entry>
+  
+  <entry>
     <title>使用gin作网关, etcd作服务发现实现go-grpc微服务的保姆级教程</title>
     <link href="http://jayj1997.github.io/2021/11/09/gin_etcd_microservices/"/>
     <id>http://jayj1997.github.io/2021/11/09/gin_etcd_microservices/</id>
-    <published>2021-11-09T07:27:12.158Z</published>
-    <updated>2021-11-11T15:36:54.018Z</updated>
+    <published>2021-11-09T05:46:00.000Z</published>
+    <updated>2021-11-18T08:48:16.843Z</updated>
     
     
       
@@ -38,6 +65,12 @@
     
     
     <category term="etcd" scheme="http://jayj1997.github.io/tags/etcd/"/>
+    
+    <category term="gin" scheme="http://jayj1997.github.io/tags/gin/"/>
+    
+    <category term="go-grpc" scheme="http://jayj1997.github.io/tags/go-grpc/"/>
+    
+    <category term="微服务" scheme="http://jayj1997.github.io/tags/%E5%BE%AE%E6%9C%8D%E5%8A%A1/"/>
     
   </entry>
   
