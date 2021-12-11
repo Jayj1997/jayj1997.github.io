@@ -69,7 +69,7 @@
       <h1><a href="/">Welcome to Jayj&#39;s Blog</a></h1>
       <div id="subtitle-box">
         
-          <span id="subtitle">code Harder, code Better</span>
+          <span id="subtitle">Code Harder, Code Better</span>
         
       </div>
       <div>
@@ -137,6 +137,155 @@
     
     
     
+    
+    <article
+  id="post-etcd-clientv3-api-document"
+  class="article article-type-post"
+  itemscope
+  itemprop="blogPost"
+  data-scroll-reveal
+>
+  <div class="article-inner">
+    
+    <header class="article-header">
+       
+<h2 itemprop="name">
+  <a class="article-title" href="/2021/12/06/etcd-clientv3-api-document/"
+    >etcd clientv3 全api文档 之 KV</a> 
+</h2>
+ 
+
+      
+    </header>
+     
+    <div class="article-meta">
+      <a href="/2021/12/06/etcd-clientv3-api-document/" class="article-date">
+  <time datetime="2021-12-06T03:07:04.000Z" itemprop="datePublished">2021-12-06</time>
+</a>    
+    </div>
+      
+    <div class="article-entry" itemprop="articleBody">
+       
+  <p>无论是新使用etcd还是需要更深一点了解etcd的人可能都会遇到我曾经遇到的问题：为什么文档这么少？为什么官方文档都不全？这个api怎么用，是什么？网上的教程简略到只有基础方法，各个网页还都是千篇一律的复制粘贴，让当初在使用etcd的我很痛苦。正好在我想要开源一个etcd的web panel的时候，我决定写出一篇文档，从源码下手，对每个api的用法讲解出来。不仅有助于我开源项目的理解，也可以帮助到对etcd不熟悉的小伙伴们。在学习etcd之前，有一个有意思的点可以帮助你理解etcd，就是将所有的key看成水平分布的key，而不是树形结构的key，如：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">/a</span><br><span class="line">    /b</span><br><span class="line">        /d</span><br><span class="line">        /e</span><br><span class="line">    /c</span><br><span class="line">        /f</span><br><span class="line">看做</span><br><span class="line">/a</span><br><span class="line">/a/b</span><br><span class="line">/a/b/d</span><br><span class="line">/a/b/e</span><br><span class="line">/a/c</span><br><span class="line">/a/c/f</span><br></pre></td></tr></table></figure>
+
+<p>这样在使用如withPrefix方法时可以更清楚的知道你到底查找、删除了哪一系列的key。</p>
+<p>关于clientv3的讲解不涉及具体的etcd源码分析，具体的源码分析会在后面写出。</p>
+<h2 id="before-started"><a href="#before-started" class="headerlink" title="before started"></a>before started</h2><p>本文依照的是etcd 版本 3.5.1，etcd的v2与v3区别很大，改变了很多原理，如auth的方式等等；而v3中 3.1 3.2 3.3 3.4 3.5也各不相同，但改动不大，在观看之前需要看清楚版本。具体各个版本的区别再后面会单独写一章。</p>
+<h2 id="get-started"><a href="#get-started" class="headerlink" title="get started"></a>get started</h2><p>在etcd全api文档的第一篇，我决定先从最常用的KV下手，包括了存取删除和事务等，基本是新手开始使用etcd最需要知道的几个方法。后面的文章也会以文件为分割来讲述etcd的源码及api使用方法。</p>
+<h3 id="KV-struct"><a href="#KV-struct" class="headerlink" title="KV struct"></a>KV struct</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> kv <span class="keyword">struct</span> &#123;</span><br><span class="line">    remote pb.KVClient</span><br><span class="line">    callOpts []grpc.CallOption</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="第一步，创建一个连接"><a href="#第一步，创建一个连接" class="headerlink" title="第一步，创建一个连接"></a>第一步，创建一个连接</h3><p>首先，你要先创建一个连接，然后才能进行后续的操作</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">cli, err := clientv3.New(clientv3.Config&#123;</span><br><span class="line">    Endpoints: <span class="string">&quot;example.endpoint&quot;</span>,</span><br><span class="line">    DialTimeout: <span class="number">5</span> * time.Second</span><br><span class="line">&#125;)</span><br><span class="line"><span class="keyword">if</span> err := <span class="literal">nil</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> err</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">defer</span> cli.Close()</span><br></pre></td></tr></table></figure>
+
+<h4 id="注意点"><a href="#注意点" class="headerlink" title="注意点"></a>注意点</h4><ul>
+<li>你应该在使用完连接后立即关闭连接，未关闭的连接会使<a target="_blank" rel="noopener" href="https://github.com/etcd-io/etcd/tree/main/client/v3#get-started">goroutine泄露</a></li>
+<li>虽然使用defer非常方便，也防止你后面忘记关闭连接。但是我更喜欢在操作完方法之后手动调用cli.Close()而不是使用defer，因为每个人的业务场景不一样，方法并不一定会在短时间内结束，可能一次bug导致这个方法一直存活着，你的defer也就一直得不到调用。</li>
+</ul>
+<h3 id="NewKV"><a href="#NewKV" class="headerlink" title="NewKV"></a>NewKV</h3><p>使用kv与直接使用cli连接调用的区别不大，kv内可以调用的方法与cli一样，具体为调用NewKV会将cli身上的callOpts带到kv上</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">NewKV</span><span class="params">(c *Client)</span> <span class="title">KV</span></span> &#123;</span><br><span class="line">    api := &amp;kv&#123;remote: RetryKVClient(c)&#125;</span><br><span class="line">    <span class="keyword">if</span> c != <span class="literal">nil</span> &#123;</span><br><span class="line">        api.callOpts = c.callOpts</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> api</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="Put"><a href="#Put" class="headerlink" title="Put"></a>Put</h3><p>将一个key-value键值对推入etcd</p>
+<p>put方法</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(kv *kv)</span> <span class="title">Put</span><span class="params">(ctx context.Context, key, val <span class="keyword">string</span>, opts ...OpOption)</span> <span class="params">(*PutResponse, error)</span></span></span><br></pre></td></tr></table></figure>
+
+<p>put的调用（使用kv）</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">kv := clientv3.NewKV(cli)</span><br><span class="line"></span><br><span class="line">resp, err := kv.Put(context.Background(), key, val, ...opts)</span><br></pre></td></tr></table></figure>
+
+<p>put的具体实现</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(kv *kv)</span> <span class="title">Put</span><span class="params">(ctx context.Context, key, val <span class="keyword">string</span>, opts ...OpOption)</span> <span class="params">(*PutResponse, error)</span></span> &#123;</span><br><span class="line"> r, err := kv.Do(ctx, OpPut(key, val, opts...))</span><br><span class="line"> <span class="keyword">return</span> r.put, toErr(ctx, err)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>关于<a href="#Do">Do方法</a></p>
+<h3 id="Get"><a href="#Get" class="headerlink" title="Get"></a>Get</h3><p>取回keys，默认会返回你传入key的value，如果传入</p>
+<ul>
+<li>WithRange(end), get会返回[key, end）范围内的结果</li>
+<li>WithFromKey(), get会返回比你传入key大或者相等的key</li>
+<li>WithRev(rev) 且 rev &gt; 0，get会返回传入key指定版本的value，如果指定的版本（rev）被压缩（compacted）了，会返回error： ErrCompacted。</li>
+<li>WithLimit(limit)，会返回指定数量内的keys</li>
+<li>WithSort()， 会对返回的keys进行过滤</li>
+</ul>
+<p>get方法</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Get(ctx context.Context, key <span class="keyword">string</span>, opts ...OpOption) (*GetResponse, error)</span><br></pre></td></tr></table></figure>
+
+<p>get的调用（使用cli）</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">resp, err := cli.Put(context.Background(), key, ...opts)</span><br></pre></td></tr></table></figure>
+
+<p>get的具体实现</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(kv *kv)</span> <span class="title">Get</span><span class="params">(ctx context.Context, key <span class="keyword">string</span>, opts ...OpOption)</span> <span class="params">(*GetResponse, error)</span></span> &#123;</span><br><span class="line"> r, err := kv.Do(ctx, OpGet(key, opts...))</span><br><span class="line"> <span class="keyword">return</span> r.get, toErr(ctx, err)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>关于<a href="#Do">Do方法</a></p>
+<h3 id="Delete"><a href="#Delete" class="headerlink" title="Delete"></a>Delete</h3><p>删除一个key，或者</p>
+<ul>
+<li>使用WithRange(end)来删除[key, range)范围的key</li>
+<li>使用WithPrefix()来删除以key开头的key</li>
+</ul>
+<p>delete方法</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Delete(ctx context.Context, key <span class="keyword">string</span>, opts ...OpOption) (*DeleteResponse, error)</span><br></pre></td></tr></table></figure>
+
+<p>delete的调用方式</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">resp, err = cli.Delete(ctx, key, ...opts)</span><br></pre></td></tr></table></figure>
+
+<p>delete的具体实现</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">r, err := kv.Do(ctx, OpDelete(key, opts...))</span><br><span class="line"><span class="keyword">return</span> r.del, toErr(ctx, err)</span><br></pre></td></tr></table></figure>
+
+<p>关于<a href="#Do">Do方法</a></p>
+<h3 id="Do"><a href="#Do" class="headerlink" title="Do"></a>Do</h3><p>Do这个方法为你可以将多种/次操作融合到一个方法内，并在之后（重复）调用。具体如何使用除了官方方法外，就要看具体的业务需求。如你可以将put-&gt;get-&gt;delete这一套流程融合到一个Do里。通过源码可以知道，官方的get、put等也是通过Do方法来实现，然后在Do内实现具体的get、put的etcd调用，区分于事务级别的调用。</p>
+<p>Do方法</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Do(ctx context.Context, op Op) (OpResponse, error)</span><br></pre></td></tr></table></figure>
+
+<p>Do的调用方式</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">ops := []clientv3.Op&#123;</span><br><span class="line">   clientv3.OpPut(<span class="string">&quot;put-key&quot;</span>, <span class="string">&quot;123&quot;</span>),</span><br><span class="line">   clientv3.OpGet(<span class="string">&quot;put-key&quot;</span>),</span><br><span class="line">   clientv3.OpPut(<span class="string">&quot;put-key&quot;</span>, <span class="string">&quot;456&quot;</span>)&#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">for</span> _, op := <span class="keyword">range</span> ops &#123;</span><br><span class="line">   <span class="keyword">if</span> _, err := cli.Do(context.TODO(), op); err != <span class="literal">nil</span> &#123;</span><br><span class="line">    log.Fatal(err)</span><br><span class="line">   &#125;</span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure>
+
+<p>Do的具体实现</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(kv *kv)</span> <span class="title">Do</span><span class="params">(ctx context.Context, op Op)</span> <span class="params">(OpResponse, error)</span></span> &#123;</span><br><span class="line"> <span class="keyword">var</span> err error</span><br><span class="line"> <span class="keyword">switch</span> op.t &#123; <span class="comment">// 对传入的op遍历</span></span><br><span class="line"> <span class="keyword">case</span> tRange:</span><br><span class="line">  <span class="keyword">var</span> resp *pb.RangeResponse</span><br><span class="line">  resp, err = kv.remote.Range(ctx, op.toRangeRequest(), kv.callOpts...)</span><br><span class="line">  <span class="keyword">if</span> err == <span class="literal">nil</span> &#123;</span><br><span class="line">   <span class="keyword">return</span> OpResponse&#123;get: (*GetResponse)(resp)&#125;, <span class="literal">nil</span></span><br><span class="line">  &#125;</span><br><span class="line"> <span class="keyword">case</span> tPut:</span><br><span class="line">  <span class="keyword">var</span> resp *pb.PutResponse</span><br><span class="line">  r := &amp;pb.PutRequest&#123;Key: op.key, Value: op.val, Lease: <span class="keyword">int64</span>(op.leaseID), PrevKv: op.prevKV, IgnoreValue: op.ignoreValue, IgnoreLease: op.ignoreLease&#125;</span><br><span class="line">  resp, err = kv.remote.Put(ctx, r, kv.callOpts...)</span><br><span class="line">  <span class="keyword">if</span> err == <span class="literal">nil</span> &#123;</span><br><span class="line">   <span class="keyword">return</span> OpResponse&#123;put: (*PutResponse)(resp)&#125;, <span class="literal">nil</span></span><br><span class="line">  &#125;</span><br><span class="line"> <span class="keyword">case</span> tDeleteRange:</span><br><span class="line">  <span class="keyword">var</span> resp *pb.DeleteRangeResponse</span><br><span class="line">  r := &amp;pb.DeleteRangeRequest&#123;Key: op.key, RangeEnd: op.end, PrevKv: op.prevKV&#125;</span><br><span class="line">  resp, err = kv.remote.DeleteRange(ctx, r, kv.callOpts...)</span><br><span class="line">  <span class="keyword">if</span> err == <span class="literal">nil</span> &#123;</span><br><span class="line">   <span class="keyword">return</span> OpResponse&#123;del: (*DeleteResponse)(resp)&#125;, <span class="literal">nil</span></span><br><span class="line">  &#125;</span><br><span class="line"> <span class="keyword">case</span> tTxn:</span><br><span class="line">  <span class="keyword">var</span> resp *pb.TxnResponse</span><br><span class="line">  resp, err = kv.remote.Txn(ctx, op.toTxnRequest(), kv.callOpts...)</span><br><span class="line">  <span class="keyword">if</span> err == <span class="literal">nil</span> &#123;</span><br><span class="line">   <span class="keyword">return</span> OpResponse&#123;txn: (*TxnResponse)(resp)&#125;, <span class="literal">nil</span></span><br><span class="line">  &#125;</span><br><span class="line"> <span class="keyword">default</span>:</span><br><span class="line">  <span class="built_in">panic</span>(<span class="string">&quot;Unknown op&quot;</span>)</span><br><span class="line"> &#125;</span><br><span class="line"> <span class="keyword">return</span> OpResponse&#123;&#125;, toErr(ctx, err)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="Txn"><a href="#Txn" class="headerlink" title="Txn"></a>Txn</h3><p>txn用来创建一个事务，将后续操作以事务进行, 事务有四种子方法</p>
+<ul>
+<li>If</li>
+<li>Then</li>
+<li>Else</li>
+<li>Commit</li>
+</ul>
+<p>Txn方法</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Txn(ctx context.Context) Txn</span><br></pre></td></tr></table></figure>
+
+<p>txn的调用例子</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">kvc := clientv3.NewKV(cli)</span><br><span class="line"></span><br><span class="line">  _, err = kvc.Put(context.TODO(), <span class="string">&quot;key&quot;</span>, <span class="string">&quot;xyz&quot;</span>)</span><br><span class="line">  <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">   log.Fatal(err)</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)</span><br><span class="line">  _, err = kvc.Txn(ctx).</span><br><span class="line">   <span class="comment">// 事务的值是字典类型的比较</span></span><br><span class="line">   If(clientv3.Compare(clientv3.Value(<span class="string">&quot;key&quot;</span>), <span class="string">&quot;&gt;&quot;</span>, <span class="string">&quot;abc&quot;</span>)).</span><br><span class="line">   <span class="comment">// &quot;xyz&quot; &gt; &quot;abc&quot; 时运行</span></span><br><span class="line">   Then(clientv3.OpPut(<span class="string">&quot;key&quot;</span>, <span class="string">&quot;XYZ&quot;</span>)).</span><br><span class="line">   <span class="comment">// else运行</span></span><br><span class="line">   Else(clientv3.OpPut(<span class="string">&quot;key&quot;</span>, <span class="string">&quot;ABC&quot;</span>)).</span><br><span class="line">   Commit()</span><br></pre></td></tr></table></figure>
+
+<p>txn的源码</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(kv *kv)</span> <span class="title">Txn</span><span class="params">(ctx context.Context)</span> <span class="title">Txn</span></span> &#123;</span><br><span class="line"> <span class="keyword">return</span> &amp;txn&#123;</span><br><span class="line">  kv:       kv,</span><br><span class="line">  ctx:      ctx,</span><br><span class="line">  callOpts: kv.callOpts,</span><br><span class="line"> &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="Compact"><a href="#Compact" class="headerlink" title="Compact"></a>Compact</h3><p>compact，压缩key-value，为了防止历史记录越来越大。传入指定的rev，会压缩rev之后的key-value历史</p>
+<p>compact方法</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Compact(ctx context.Context, rev <span class="keyword">int64</span>, opts ...CompactOption) (*CompactResponse, error)</span><br></pre></td></tr></table></figure>
+
+<p>compact的调用方式</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">resp, err := cli.Get(ctx, <span class="string">&quot;foo&quot;</span>)</span><br><span class="line">  cancel()</span><br><span class="line">  <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">   log.Fatal(err)</span><br><span class="line">  &#125;</span><br><span class="line">  compRev := resp.Header.Revision <span class="comment">// 具体你要压缩哪个版本之前的key-val</span></span><br><span class="line"></span><br><span class="line">  ctx, cancel = context.WithTimeout(context.Background(), requestTimeout)</span><br><span class="line">  _, err = cli.Compact(ctx, compRev)</span><br></pre></td></tr></table></figure>
+
+<p>compact的具体实现</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(kv *kv)</span> <span class="title">Compact</span><span class="params">(ctx context.Context, rev <span class="keyword">int64</span>, opts ...CompactOption)</span> <span class="params">(*CompactResponse, error)</span></span> &#123;</span><br><span class="line"> resp, err := kv.remote.Compact(ctx, OpCompact(rev, opts...).toRequest(), kv.callOpts...)</span><br><span class="line"> <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">  <span class="keyword">return</span> <span class="literal">nil</span>, toErr(ctx, err)</span><br><span class="line"> &#125;</span><br><span class="line"> <span class="keyword">return</span> (*CompactResponse)(resp), err</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="end"><a href="#end" class="headerlink" title="end"></a>end</h2><p>这是关于clientv3 api讲解的第一章，如果你有什么建议、想法、编写错误的指出或者好的想法，欢迎通过email或issue的方式来告诉我。</p>
+ 
+      <!-- reward -->
+      
+    </div>
+    
+
+    <!-- copyright -->
+    
+    <footer class="article-footer">
+       
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/clientv3/" rel="tag">clientv3</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/etcd/" rel="tag">etcd</a></li></ul>
+
+    </footer>
+  </div>
+
+    
+ 
+    
+</article>
+
     
     <article
   id="post-how-to-lpg"

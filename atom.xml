@@ -6,7 +6,7 @@
   <link href="http://jayj1997.github.io/atom.xml" rel="self"/>
   
   <link href="http://jayj1997.github.io/"/>
-  <updated>2021-11-18T08:47:47.911Z</updated>
+  <updated>2021-12-11T08:35:57.375Z</updated>
   <id>http://jayj1997.github.io/</id>
   
   <author>
@@ -15,6 +15,31 @@
   </author>
   
   <generator uri="https://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>etcd clientv3 全api文档 之 KV</title>
+    <link href="http://jayj1997.github.io/2021/12/06/etcd-clientv3-api-document/"/>
+    <id>http://jayj1997.github.io/2021/12/06/etcd-clientv3-api-document/</id>
+    <published>2021-12-06T03:07:04.000Z</published>
+    <updated>2021-12-11T08:35:57.375Z</updated>
+    
+    
+      
+      
+        
+        
+    <summary type="html">&lt;p&gt;无论是新使用etcd还是需要更深一点了解etcd的人可能都会遇到我曾经遇到的问题：为什么文档这么少？为什么官方文档都不全？这个api怎么用，是什么？网上的教程简略到只有基础方法，各个网页还都是千篇一律的复制粘贴，让当初在使用etcd的我很痛苦。正好在我想要开源一个etcd的</summary>
+        
+      
+    
+    
+    
+    
+    <category term="etcd" scheme="http://jayj1997.github.io/tags/etcd/"/>
+    
+    <category term="clientv3" scheme="http://jayj1997.github.io/tags/clientv3/"/>
+    
+  </entry>
   
   <entry>
     <title>使用docker部署一套相比ELK更轻量的日志系统LPG</title>
